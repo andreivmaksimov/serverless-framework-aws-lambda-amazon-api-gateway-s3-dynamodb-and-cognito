@@ -1,97 +1,23 @@
-# Welcome to Serverless!
-#
-# This file is the main config file for your service.
-# It's very minimal at this point and uses default values.
-# You can always add more config options for more control.
-# We've included some commented out config examples here.
-# Just uncomment any of them to get that config option.
-#
-# For full config options, check the docs:
-#    docs.serverless.com
-#
-# Happy Coding!
-
 service: wild-rides-serverless-demo # NOTE: update this with your service name
-
-# You can pin your service to only deploy with a specific Serverless version
-# Check out our docs for more details
-# frameworkVersion: "=X.X.X"
 
 provider:
   name: aws
   runtime: nodejs8.10
   stage: ${opt:stage, 'dev'}
 
-# you can overwrite defaults here
-#  stage: dev
-#  region: us-east-1
-
-# you can add statements to the Lambda function's IAM Role here
-#  iamRoleStatements:
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:ListBucket"
-#      Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ] ]  }
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:PutObject"
-#      Resource:
-#        Fn::Join:
-#          - ""
-#          - - "arn:aws:s3:::"
-#            - "Ref" : "ServerlessDeploymentBucket"
-#            - "/*"
-
-# you can define service wide environment variables here
-#  environment:
-#    variable1: value1
-
-# you can add packaging information here
-#package:
-#  include:
-#    - include-me.js
-#    - include-me-dir/**
-#  exclude:
-#    - exclude-me.js
-#    - exclude-me-dir/**
-
 functions:
   RequestUnicorn:
     handler: handler.handler
     role: WildRydesLambdaRole
-
-#    The following are a few example events you can configure
-#    NOTE: Please make sure to change your handler code to work with those events
-#    Check the event documentation for details
-#    events:
-#      - http:
-#          path: users/create
-#          method: get
-#      - s3: ${env:BUCKET}
-#      - schedule: rate(10 minutes)
-#      - sns: greeter-topic
-#      - stream: arn:aws:dynamodb:region:XXXXXX:table/foo/stream/1970-01-01T00:00:00.000
-#      - alexaSkill: amzn1.ask.skill.xx-xx-xx-xx
-#      - alexaSmartHome: amzn1.ask.skill.xx-xx-xx-xx
-#      - iot:
-#          sql: "SELECT * FROM 'some_topic'"
-#      - cloudwatchEvent:
-#          event:
-#            source:
-#              - "aws.ec2"
-#            detail-type:
-#              - "EC2 Instance State-change Notification"
-#            detail:
-#              state:
-#                - pending
-#      - cloudwatchLog: '/aws/lambda/hello'
-#      - cognitoUserPool:
-#          pool: MyUserPool
-#          trigger: PreSignUp
-
-#    Define function environment variables here
-#    environment:
-#      variable2: value2
+    events:
+      - http:
+          path: ride
+          method: post
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: WildRydesApiGatewayAuthorizer
 
 # you can add CloudFormation resource templates here
 resources:
@@ -181,108 +107,16 @@ resources:
                     - dynamodb:PutItem
                   Resource:
                     'Fn::GetAtt': [ WildRydesDynamoDBTable, Arn ]
-    WildRydesApiGatewayRestApi:
-      Type: AWS::ApiGateway::RestApi
-      Properties:
-        Name: WildRydes
-        EndpointConfiguration:
-          Types:
-            - EDGE
     WildRydesApiGatewayAuthorizer:
       Type: AWS::ApiGateway::Authorizer
       Properties:
         Name: WildRydes
         RestApiId:
-          Ref: WildRydesApiGatewayRestApi
+          Ref: ApiGatewayRestApi
         Type: COGNITO_USER_POOLS
         ProviderARNs:
           - Fn::GetAtt: [ WildRydesCognitoUserPool, Arn ]
         IdentitySource: method.request.header.Authorization
-    WildRydeApiGatewayRidesResource:
-      Type: AWS::ApiGateway::Resource
-      Properties:
-        ParentId:
-          Fn::GetAtt: [ WildRydesApiGatewayRestApi, RootResourceId ]
-        PathPart: ride
-        RestApiId:
-          Ref: WildRydesApiGatewayRestApi
-    WildRydesRideOptionsMethod:
-      Type: AWS::ApiGateway::Method
-      Properties:
-        AuthorizationType: NONE
-        RestApiId:
-          Ref: WildRydesApiGatewayRestApi
-        ResourceId:
-          Ref: WildRydeApiGatewayRidesResource
-        HttpMethod: OPTIONS
-        Integration:
-          IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-            ResponseTemplates:
-              application/json: ''
-          PassthroughBehavior: WHEN_NO_MATCH
-          RequestTemplates:
-            application/json: '{"statusCode": 200}'
-          Type: MOCK
-        MethodResponses:
-        - StatusCode: 200
-          ResponseModels:
-            application/json: 'Empty'
-          ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: false
-              method.response.header.Access-Control-Allow-Methods: false
-              method.response.header.Access-Control-Allow-Origin: false
-    WildRydesRidePostMethod:
-      Type: AWS::ApiGateway::Method
-      Properties:
-        AuthorizerId:
-          Ref: WildRydesApiGatewayAuthorizer
-        AuthorizationType: COGNITO_USER_POOLS
-        HttpMethod: POST
-        ResourceId:
-          Ref: WildRydeApiGatewayRidesResource
-        RestApiId:
-          Ref: WildRydesApiGatewayRestApi
-        Integration:
-          Type: AWS_PROXY
-          IntegrationHttpMethod: POST
-          Uri: 
-            Fn::Join:
-              - ':'
-              - 
-                - "arn:aws:apigateway"
-                - Ref: 'AWS::Region'
-                - 'lambda'
-                - Fn::Join:
-                  - '/'
-                  -
-                    - 'path'
-                    - '2015-03-31'
-                    - 'functions'
-                    - Fn::GetAtt: [ RequestUnicornLambdaFunction, Arn ]
-                    - 'invocations'
-          IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-            ResponseTemplates:
-              application/json: ''
-          PassthroughBehavior: WHEN_NO_MATCH
-          RequestTemplates:
-            application/json: '{"statusCode": 200}'
-    WildRydesApiGatewayDeployment:
-      Type: AWS::ApiGateway::Deployment
-      Properties:
-        Description: Wild Rydes Api
-        RestApiId:
-          Ref: WildRydesApiGatewayRestApi
-        StageName: ${opt:stage, 'dev'}
   Outputs:
     WildRydesBucketURL:
       Description: "Wild Rydes Bucket Website URL"
@@ -300,16 +134,3 @@ resources:
       Description: "Wild Rydes DynamoDB ARN"
       Value:
         "Fn::GetAtt": [ WildRydesDynamoDBTable, Arn ]
-    WildRydesApiGatewayUrl:
-      Description: "Wild Rydes Api Gateway URL"
-      Value:
-        "Fn::Join":
-          - ""
-          -
-            - "https://"
-            - Ref: "WildRydesApiGatewayRestApi"
-            - ".execute-api."
-            - Ref: "AWS::Region"
-            - ".amazonaws.com"
-            - "/${opt:stage, 'dev'}"
-
